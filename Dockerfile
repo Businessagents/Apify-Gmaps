@@ -2,7 +2,9 @@
 # The playwright version in package.json ("*") resolves to the one preinstalled here.
 FROM apify/actor-node-playwright-chrome:20
 
-COPY package*.json ./
+# The base image runs as the non-root user "myuser" — files must be chowned
+# to it or npm cannot write into the workdir.
+COPY --chown=myuser package*.json ./
 
 RUN npm --quiet set progress=false \
     && npm install --omit=dev --omit=optional \
@@ -13,6 +15,6 @@ RUN npm --quiet set progress=false \
     && echo "NPM version:" \
     && npm --version
 
-COPY . ./
+COPY --chown=myuser . ./
 
 CMD npm start --silent
