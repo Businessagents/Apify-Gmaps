@@ -2,8 +2,8 @@
     "actorSpecification": 1,
     "name": "gmaps-listings-scraper",
     "title": "Google Maps Listings Scraper",
-    "description": "Scrapes Google Maps listings for given search terms with filters for minimum reviews, rating, and website presence.",
-    "version": "0.1",
+    "description": "Scrape Google Maps listings with filters for rating, review count, categories, website presence, name matching, and closed places. Input-compatible with compass/crawler-google-places filters.",
+    "version": "0.2",
     "input": "./input_schema.json",
     "dockerfile": "../Dockerfile",
     "storages": {
@@ -22,6 +22,7 @@
                             "phone",
                             "website",
                             "address",
+                            "permanentlyClosed",
                             "gmapsUrl",
                             "searchTerm"
                         ]
@@ -36,6 +37,7 @@
                             "phone": { "label": "Phone", "format": "text" },
                             "website": { "label": "Website", "format": "link" },
                             "address": { "label": "Address", "format": "text" },
+                            "permanentlyClosed": { "label": "Closed", "format": "boolean" },
                             "gmapsUrl": { "label": "Google Maps", "format": "link" },
                             "searchTerm": { "label": "Search term", "format": "text" }
                         }

@@ -3,84 +3,142 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "searchTerms": {
-            "title": "Search terms",
+        "searchStringsArray": {
+            "title": "🔍 Search terms",
             "type": "array",
-            "description": "What to search for on Google Maps, e.g. \"dentist\" or \"coffee shop\". Each term is run as a separate search (combined with the location below, if set).",
+            "description": "What to search for on Google Maps, e.g. <b>restaurant</b> or <b>dentist</b>. Each term runs as a separate search, combined with the 📍 Location below. You can also include a location directly in the term (e.g. <b>dentist Austin TX</b>).",
             "editor": "stringList",
-            "prefill": ["restaurant"],
-            "minItems": 1
+            "prefill": ["restaurant"]
         },
-        "location": {
-            "title": "Location",
+        "locationQuery": {
+            "title": "📍 Location",
             "type": "string",
-            "description": "Optional location appended to every search term, e.g. \"Austin, TX\" or \"Berlin, Germany\". Leave empty if your search terms already include a location.",
+            "description": "Location appended to every search term, e.g. <b>New York, USA</b> or <b>Berlin, Germany</b>. Leave empty if your search terms or start URLs already define a location.",
             "editor": "textfield",
-            "prefill": "New York, NY"
+            "prefill": "New York, USA"
         },
-        "minReviews": {
-            "title": "Minimum number of reviews",
+        "maxCrawledPlacesPerSearch": {
+            "title": "Number of places per search term",
             "type": "integer",
-            "description": "Only include listings with at least this many reviews. Set to 0 to disable.",
-            "editor": "number",
-            "minimum": 0,
-            "default": 0
-        },
-        "maxReviews": {
-            "title": "Maximum number of reviews",
-            "type": "integer",
-            "description": "Only include listings with at most this many reviews. Leave empty to disable. Useful for finding smaller businesses.",
-            "editor": "number",
-            "minimum": 0,
-            "nullable": true
-        },
-        "minRating": {
-            "title": "Minimum star rating",
-            "type": "string",
-            "description": "Only include listings rated at least this many stars (0–5), e.g. \"4\" or \"3.5\". Leave empty to disable. Listings with no rating yet are excluded when this is set.",
-            "editor": "textfield",
-            "nullable": true
-        },
-        "maxRating": {
-            "title": "Maximum star rating",
-            "type": "string",
-            "description": "Only include listings rated at most this many stars (0–5). Leave empty to disable. Useful for finding poorly rated businesses.",
-            "editor": "textfield",
-            "nullable": true
-        },
-        "websiteFilter": {
-            "title": "Website filter",
-            "type": "string",
-            "description": "Filter listings by whether they have a website. \"Only without a website\" is handy for lead generation.",
-            "editor": "select",
-            "enum": ["all", "withWebsite", "withoutWebsite"],
-            "enumTitles": ["All listings", "Only with a website", "Only without a website"],
-            "default": "all"
-        },
-        "maxResultsPerSearch": {
-            "title": "Max results per search term",
-            "type": "integer",
-            "description": "Maximum number of listings to collect per search term (before filtering). Google Maps itself rarely returns more than ~120 results per search.",
+            "description": "Maximum number of places collected per search term (before filtering). Google Maps itself rarely returns more than ~120 results per search — split a big city into neighborhoods or ZIP codes for more coverage.",
             "editor": "number",
             "minimum": 1,
-            "maximum": 300,
-            "default": 100
+            "maximum": 500,
+            "default": 100,
+            "sectionCaption": "Amount & language"
+        },
+        "maxCrawledPlaces": {
+            "title": "Total number of places (all searches)",
+            "type": "integer",
+            "description": "Overall cap on saved places across all search terms and start URLs. Leave empty for no cap. The run stops once this many places have been saved.",
+            "editor": "number",
+            "minimum": 1,
+            "nullable": true
         },
         "language": {
             "title": "Language",
             "type": "string",
-            "description": "Language code for Google Maps (hl parameter). Keep \"en\" unless you need localized results.",
+            "description": "Results are localized to this language (Google's <code>hl</code> parameter).",
+            "editor": "select",
+            "default": "en",
+            "enum": ["en", "af", "ar", "bg", "ca", "cs", "da", "de", "el", "es", "et", "fa", "fi", "fr", "he", "hi", "hr", "hu", "id", "it", "ja", "ko", "lt", "lv", "ms", "nl", "no", "pl", "pt", "pt-BR", "pt-PT", "ro", "ru", "sk", "sl", "sr", "sv", "th", "tr", "uk", "vi", "zh-CN", "zh-TW"],
+            "enumTitles": ["English", "Afrikaans", "Arabic", "Bulgarian", "Catalan", "Czech", "Danish", "German", "Greek", "Spanish", "Estonian", "Persian", "Finnish", "French", "Hebrew", "Hindi", "Croatian", "Hungarian", "Indonesian", "Italian", "Japanese", "Korean", "Lithuanian", "Latvian", "Malay", "Dutch", "Norwegian", "Polish", "Portuguese", "Portuguese (Brazil)", "Portuguese (Portugal)", "Romanian", "Russian", "Slovak", "Slovenian", "Serbian", "Swedish", "Thai", "Turkish", "Ukrainian", "Vietnamese", "Chinese (Simplified)", "Chinese (Traditional)"]
+        },
+        "categoryFilterWords": {
+            "title": "🎢 Place categories",
+            "type": "array",
+            "description": "Only include places whose category matches one of these words, e.g. <b>restaurant</b>, <b>hotel</b>. Matching is case-insensitive and matches partial category names (<b>restaurant</b> also matches <i>Sushi restaurant</i>). Leave empty to keep all categories.",
+            "editor": "stringList",
+            "sectionCaption": "🔍 Filters",
+            "sectionDescription": "Narrow down which places are saved to the dataset. All filters combine — a place must pass every one."
+        },
+        "searchMatching": {
+            "title": "Match search terms in place names",
+            "type": "string",
+            "description": "Restrict results to places whose <b>name</b> matches the search term. Useful for finding all locations of a specific brand.",
+            "editor": "select",
+            "default": "all",
+            "enum": ["all", "only_includes", "only_exact"],
+            "enumTitles": ["All places (no restriction)", "Place name must include the search term", "Place name must exactly match the search term"]
+        },
+        "placeMinimumStars": {
+            "title": "⭐ Minimum star rating",
+            "type": "string",
+            "description": "Only include places rated at least this many stars. Places with no rating yet are excluded when this is set.",
+            "editor": "select",
+            "default": "",
+            "enum": ["", "two", "twoAndHalf", "three", "threeAndHalf", "four", "fourAndHalf"],
+            "enumTitles": ["Any rating", "⭐ 2.0+", "⭐ 2.5+", "⭐ 3.0+", "⭐ 3.5+", "⭐ 4.0+", "⭐ 4.5+"]
+        },
+        "maximumStars": {
+            "title": "Maximum star rating",
+            "type": "string",
+            "description": "Only include places rated <b>at most</b> this many stars (0–5), e.g. <b>3.5</b>. Leave empty to disable. Useful for finding poorly rated businesses.",
             "editor": "textfield",
-            "default": "en"
+            "nullable": true
+        },
+        "minReviewsCount": {
+            "title": "Minimum number of reviews",
+            "type": "integer",
+            "description": "Only include places with at least this many reviews. Set to 0 to disable.",
+            "editor": "number",
+            "minimum": 0,
+            "default": 0
+        },
+        "maxReviewsCount": {
+            "title": "Maximum number of reviews",
+            "type": "integer",
+            "description": "Only include places with at most this many reviews. Leave empty to disable. Useful for finding smaller businesses.",
+            "editor": "number",
+            "minimum": 0,
+            "nullable": true
+        },
+        "website": {
+            "title": "🌐 Websites filter",
+            "type": "string",
+            "description": "Filter places by whether they list a website. <b>Only without a website</b> is handy for web-design/marketing lead generation.",
+            "editor": "select",
+            "default": "allPlaces",
+            "enum": ["allPlaces", "withWebsite", "withoutWebsite"],
+            "enumTitles": ["All places", "Only places with a website", "Only places without a website"]
+        },
+        "phone": {
+            "title": "📞 Phone numbers filter",
+            "type": "string",
+            "description": "Filter places by whether they list a contact phone number. <b>Only without a phone number</b> can help find businesses with incomplete listings.",
+            "editor": "select",
+            "default": "allPlaces",
+            "enum": ["allPlaces", "withPhone", "withoutPhone"],
+            "enumTitles": ["All places", "Only places with a phone number", "Only places without a phone number"]
+        },
+        "skipClosedPlaces": {
+            "title": "⛔ Skip closed places",
+            "type": "boolean",
+            "description": "Skip places marked as temporarily or permanently closed.",
+            "default": false
+        },
+        "startUrls": {
+            "title": "Start URLs",
+            "type": "array",
+            "description": "Google Maps URLs to scrape directly — either search URLs (<code>google.com/maps/search/...</code>) or place URLs (<code>google.com/maps/place/...</code>). Runs in addition to the search terms above.",
+            "editor": "requestListSources",
+            "sectionCaption": "Advanced",
+            "sectionDescription": "Direct URLs, output tweaks, and proxy settings."
+        },
+        "exportPlaceUrls": {
+            "title": "Export only place URLs from search",
+            "type": "boolean",
+            "description": "Save name, rating, review count, and place URL straight from the search results without opening each place page. Much faster and cheaper, but the dataset won't contain phone, website, address, or category — and filters that need those fields (websites filter, categories, closed places) are not applied.",
+            "default": false
         },
         "proxyConfiguration": {
             "title": "Proxy configuration",
             "type": "object",
-            "description": "Proxy to use for scraping. Apify residential proxies are strongly recommended — Google blocks datacenter IPs quickly.",
+            "description": "Proxy to use for scraping. Apify <b>residential</b> proxies are strongly recommended — Google blocks datacenter IPs quickly.",
             "editor": "proxy",
             "prefill": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] },
             "default": { "useApifyProxy": true }
         }
     },
-    "required": ["searchTerms"]
+    "required": []
 }
