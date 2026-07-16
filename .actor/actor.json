@@ -1,0 +1,47 @@
+{
+    "actorSpecification": 1,
+    "name": "gmaps-listings-scraper",
+    "title": "Google Maps Listings Scraper",
+    "description": "Scrapes Google Maps listings for given search terms with filters for minimum reviews, rating, and website presence.",
+    "version": "0.1",
+    "input": "./input_schema.json",
+    "dockerfile": "../Dockerfile",
+    "storages": {
+        "dataset": {
+            "actorSpecification": 1,
+            "title": "Google Maps listings",
+            "views": {
+                "overview": {
+                    "title": "Overview",
+                    "transformation": {
+                        "fields": [
+                            "name",
+                            "category",
+                            "rating",
+                            "reviewCount",
+                            "phone",
+                            "website",
+                            "address",
+                            "gmapsUrl",
+                            "searchTerm"
+                        ]
+                    },
+                    "display": {
+                        "component": "table",
+                        "properties": {
+                            "name": { "label": "Name", "format": "text" },
+                            "category": { "label": "Category", "format": "text" },
+                            "rating": { "label": "Rating", "format": "number" },
+                            "reviewCount": { "label": "Reviews", "format": "number" },
+                            "phone": { "label": "Phone", "format": "text" },
+                            "website": { "label": "Website", "format": "link" },
+                            "address": { "label": "Address", "format": "text" },
+                            "gmapsUrl": { "label": "Google Maps", "format": "link" },
+                            "searchTerm": { "label": "Search term", "format": "text" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,86 @@
+{
+    "title": "Google Maps Listings Scraper",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "searchTerms": {
+            "title": "Search terms",
+            "type": "array",
+            "description": "What to search for on Google Maps, e.g. \"dentist\" or \"coffee shop\". Each term is run as a separate search (combined with the location below, if set).",
+            "editor": "stringList",
+            "prefill": ["restaurant"],
+            "minItems": 1
+        },
+        "location": {
+            "title": "Location",
+            "type": "string",
+            "description": "Optional location appended to every search term, e.g. \"Austin, TX\" or \"Berlin, Germany\". Leave empty if your search terms already include a location.",
+            "editor": "textfield",
+            "prefill": "New York, NY"
+        },
+        "minReviews": {
+            "title": "Minimum number of reviews",
+            "type": "integer",
+            "description": "Only include listings with at least this many reviews. Set to 0 to disable.",
+            "editor": "number",
+            "minimum": 0,
+            "default": 0
+        },
+        "maxReviews": {
+            "title": "Maximum number of reviews",
+            "type": "integer",
+            "description": "Only include listings with at most this many reviews. Leave empty to disable. Useful for finding smaller businesses.",
+            "editor": "number",
+            "minimum": 0,
+            "nullable": true
+        },
+        "minRating": {
+            "title": "Minimum star rating",
+            "type": "string",
+            "description": "Only include listings rated at least this many stars (0–5), e.g. \"4\" or \"3.5\". Leave empty to disable. Listings with no rating yet are excluded when this is set.",
+            "editor": "textfield",
+            "nullable": true
+        },
+        "maxRating": {
+            "title": "Maximum star rating",
+            "type": "string",
+            "description": "Only include listings rated at most this many stars (0–5). Leave empty to disable. Useful for finding poorly rated businesses.",
+            "editor": "textfield",
+            "nullable": true
+        },
+        "websiteFilter": {
+            "title": "Website filter",
+            "type": "string",
+            "description": "Filter listings by whether they have a website. \"Only without a website\" is handy for lead generation.",
+            "editor": "select",
+            "enum": ["all", "withWebsite", "withoutWebsite"],
+            "enumTitles": ["All listings", "Only with a website", "Only without a website"],
+            "default": "all"
+        },
+        "maxResultsPerSearch": {
+            "title": "Max results per search term",
+            "type": "integer",
+            "description": "Maximum number of listings to collect per search term (before filtering). Google Maps itself rarely returns more than ~120 results per search.",
+            "editor": "number",
+            "minimum": 1,
+            "maximum": 300,
+            "default": 100
+        },
+        "language": {
+            "title": "Language",
+            "type": "string",
+            "description": "Language code for Google Maps (hl parameter). Keep \"en\" unless you need localized results.",
+            "editor": "textfield",
+            "default": "en"
+        },
+        "proxyConfiguration": {
+            "title": "Proxy configuration",
+            "type": "object",
+            "description": "Proxy to use for scraping. Apify residential proxies are strongly recommended — Google blocks datacenter IPs quickly.",
+            "editor": "proxy",
+            "prefill": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] },
+            "default": { "useApifyProxy": true }
+        }
+    },
+    "required": ["searchTerms"]
+}
