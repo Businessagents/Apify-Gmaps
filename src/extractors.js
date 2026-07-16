@@ -3,6 +3,17 @@
  * Kept free of Crawlee/Playwright imports so they can be unit-tested directly.
  */
 
+/** Maps compass/crawler-google-places style star enums to numbers. */
+export const PLACE_MINIMUM_STARS = {
+    '': null,
+    two: 2,
+    twoAndHalf: 2.5,
+    three: 3,
+    threeAndHalf: 3.5,
+    four: 4,
+    fourAndHalf: 4.5,
+};
+
 /** Parses a user-supplied rating bound like "4" or "3,5" into a number 0–5 (or null). */
 export const parseRatingInput = (value, name) => {
     if (value === null || value === undefined || value === '') return null;
@@ -26,6 +37,35 @@ export const parseRatingLabel = (label) => {
 };
 
 /**
+ * Extracts the place coordinates from a Google Maps place URL.
+ * Prefers the `!3d<lat>!4d<lng>` pair (the place itself) over `@lat,lng` (map center).
+ */
+export const parseCoordsFromUrl = (url) => {
+    if (!url) return null;
+    let match = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (!match) match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (!match) return null;
+    return { lat: Number.parseFloat(match[1]), lng: Number.parseFloat(match[2]) };
+};
+
+/**
+ * compass-style search term matching against the place name.
+ * - "all": no restriction
+ * - "only_includes": place name must contain the search term
+ * - "only_exact": place name must equal the search term
+ * Unknown names pass (the place page recheck decides); no term = no restriction.
+ */
+export const matchesSearchTerm = (name, term, searchMatching = 'all') => {
+    if (searchMatching === 'all' || !term) return true;
+    if (name === null || name === undefined) return true;
+    const normalizedName = name.trim().toLowerCase();
+    const normalizedTerm = term.trim().toLowerCase();
+    if (searchMatching === 'only_includes') return normalizedName.includes(normalizedTerm);
+    if (searchMatching === 'only_exact') return normalizedName === normalizedTerm;
+    return true;
+};
+
+/**
  * Builds the filter predicates from the actor input.
  *
  * `passesRatingReviewFilters` returns false only when the listing is KNOWN to
@@ -33,7 +73,16 @@ export const parseRatingLabel = (label) => {
  * `strict: true` (final check on the place page), missing values are treated
  * as failing when the corresponding filter is set.
  */
-export const buildFilters = ({ minReviews, maxReviews, minRating, maxRating, websiteFilter }) => {
+export const buildFilters = ({
+    minReviews,
+    maxReviews,
+    minRating,
+    maxRating,
+    websiteFilter,
+    phoneFilter = 'allPlaces',
+    skipClosedPlaces = false,
+    categoryFilterWords = [],
+}) => {
     const passesRatingReviewFilters = ({ rating, reviewCount }, { strict = false } = {}) => {
         if (reviewCount !== null && reviewCount !== undefined) {
             if (minReviews && reviewCount < minReviews) return false;
@@ -53,8 +102,36 @@ export const buildFilters = ({ minReviews, maxReviews, minRating, maxRating, web
     const passesWebsiteFilter = (website) => {
         if (websiteFilter === 'withWebsite') return Boolean(website);
         if (websiteFilter === 'withoutWebsite') return !website;
-        return true;
+        return true; // 'all' / 'allPlaces'
     };
 
-    return { passesRatingReviewFilters, passesWebsiteFilter };
+    const passesPhoneFilter = (phone) => {
+        if (phoneFilter === 'withPhone') return Boolean(phone);
+        if (phoneFilter === 'withoutPhone') return !phone;
+        return true; // 'allPlaces'
+    };
+
+    const passesClosedFilter = ({ permanentlyClosed, temporarilyClosed }) => {
+        if (!skipClosedPlaces) return true;
+        return !permanentlyClosed && !temporarilyClosed;
+    };
+
+    const normalizedCategoryWords = (categoryFilterWords ?? [])
+        .map((word) => String(word).trim().toLowerCase())
+        .filter(Boolean);
+
+    const passesCategoryFilter = (category) => {
+        if (normalizedCategoryWords.length === 0) return true;
+        if (!category) return false;
+        const normalized = category.trim().toLowerCase();
+        return normalizedCategoryWords.some((word) => normalized.includes(word));
+    };
+
+    return {
+        passesRatingReviewFilters,
+        passesWebsiteFilter,
+        passesPhoneFilter,
+        passesClosedFilter,
+        passesCategoryFilter,
+    };
 };

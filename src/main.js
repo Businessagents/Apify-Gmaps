@@ -1,43 +1,86 @@
 import { Actor } from 'apify';
 import { PlaywrightCrawler, log } from 'crawlee';
-import { buildFilters, parseRatingInput, parseRatingLabel } from './extractors.js';
+import {
+    PLACE_MINIMUM_STARS,
+    buildFilters,
+    matchesSearchTerm,
+    parseCoordsFromUrl,
+    parseRatingInput,
+    parseRatingLabel,
+} from './extractors.js';
 
 await Actor.init();
 
 const input = (await Actor.getInput()) ?? {};
-const {
-    searchTerms = [],
-    location = '',
-    minReviews = 0,
-    maxReviews = null,
-    minRating: minRatingRaw = null,
-    maxRating: maxRatingRaw = null,
-    websiteFilter = 'all',
-    maxResultsPerSearch = 100,
-    language = 'en',
-    proxyConfiguration: proxyInput = { useApifyProxy: true },
-} = input;
 
-if (!Array.isArray(searchTerms) || searchTerms.length === 0) {
-    throw new Error('Input error: "searchTerms" must be a non-empty array of search terms.');
+// Field names mirror compass/crawler-google-places where possible.
+// NOTE: Actor.getInput() merges input-schema defaults into the input, so
+// fields with schema defaults always arrive with a value.
+const searchTerms = input.searchStringsArray ?? [];
+const location = input.locationQuery ?? '';
+const startUrls = input.startUrls ?? [];
+const maxPlacesPerSearch = input.maxCrawledPlacesPerSearch ?? 100;
+const maxCrawledPlaces = input.maxCrawledPlaces ?? null;
+const language = input.language ?? 'en';
+const categoryFilterWords = input.categoryFilterWords ?? [];
+const searchMatching = input.searchMatching ?? 'all';
+const skipClosedPlaces = input.skipClosedPlaces ?? false;
+const exportPlaceUrls = input.exportPlaceUrls ?? false;
+const proxyInput = input.proxyConfiguration ?? { useApifyProxy: true };
+
+const websiteFilter = input.website ?? 'allPlaces';
+const phoneFilter = input.phone ?? 'allPlaces';
+
+// Review-count bounds (this actor's own filters; not in compass).
+const minReviews = input.minReviewsCount ?? 0;
+const maxReviews = input.maxReviewsCount ?? null;
+
+// Minimum rating: compass-style star enum; optional numeric maximum.
+const placeMinimumStarsKey = input.placeMinimumStars ?? '';
+if (!(placeMinimumStarsKey in PLACE_MINIMUM_STARS)) {
+    throw new Error(`Input error: unknown "placeMinimumStars" value "${input.placeMinimumStars}".`);
+}
+const minRating = PLACE_MINIMUM_STARS[placeMinimumStarsKey];
+const maxRating = parseRatingInput(input.maximumStars ?? null, 'maximumStars');
+
+if (searchTerms.length === 0 && startUrls.length === 0) {
+    throw new Error('Input error: provide at least one search term ("searchStringsArray") or one start URL ("startUrls").');
 }
 
-const minRating = parseRatingInput(minRatingRaw, 'minRating');
-const maxRating = parseRatingInput(maxRatingRaw, 'maxRating');
+log.info('Effective configuration', {
+    searchTerms, location, startUrls: startUrls.length, maxPlacesPerSearch, maxCrawledPlaces,
+    minReviews, maxReviews, minRating, maxRating, websiteFilter, phoneFilter,
+    searchMatching, categoryFilterWords, skipClosedPlaces, exportPlaceUrls,
+});
 
-log.info('Filters', { minReviews, maxReviews, minRating, maxRating, websiteFilter });
-
-const { passesRatingReviewFilters, passesWebsiteFilter } = buildFilters({
-    minReviews, maxReviews, minRating, maxRating, websiteFilter,
+const {
+    passesRatingReviewFilters,
+    passesWebsiteFilter,
+    passesPhoneFilter,
+    passesClosedFilter,
+    passesCategoryFilter,
+} = buildFilters({
+    minReviews, maxReviews, minRating, maxRating, websiteFilter, phoneFilter, skipClosedPlaces, categoryFilterWords,
 });
 
 // Overridable so the pipeline can be tested against a local fixture server.
 const BASE_URL = process.env.GMAPS_BASE_URL || 'https://www.google.com';
 
-// Number of place pages enqueued per search term, capped at maxResultsPerSearch.
+// Number of place pages enqueued per search term, capped at maxPlacesPerSearch.
 const enqueuedPerTerm = new Map();
 // Stats for the final summary.
 const stats = { found: 0, scraped: 0, filteredOut: 0 };
+
+const saveItem = async (item, crawlerRef) => {
+    stats.scraped += 1;
+    await Actor.pushData(item);
+    if (maxCrawledPlaces !== null && stats.scraped >= maxCrawledPlaces) {
+        log.info(`Reached maxCrawledPlaces (${maxCrawledPlaces}), stopping the crawler.`);
+        crawlerRef.stop();
+    }
+};
+
+const capReached = () => maxCrawledPlaces !== null && stats.scraped >= maxCrawledPlaces;
 
 const proxyConfiguration = await Actor.createProxyConfiguration(proxyInput);
 
@@ -89,7 +132,18 @@ const extractPlaceDetails = async (page) => {
             if (match) reviewCount = Number.parseInt(match[1].replace(/[^\d]/g, ''), 10);
         }
 
-        return { name, category, website, phone, address, rating, reviewCount };
+        const mainText = document.querySelector('div[role="main"]')?.innerText ?? '';
+        const permanentlyClosed = /permanently closed/i.test(mainText);
+        const temporarilyClosed = /temporarily closed/i.test(mainText);
+
+        // Best-effort Google place ID (ChIJ...) from the page source.
+        const idMatch = document.documentElement.innerHTML.match(/"(ChIJ[0-9A-Za-z_-]{10,})"/);
+        const placeId = idMatch ? idMatch[1] : null;
+
+        return {
+            name, category, website, phone, address, rating, reviewCount,
+            permanentlyClosed, temporarilyClosed, placeId,
+        };
     });
 };
 
@@ -121,16 +175,17 @@ const crawler = new PlaywrightCrawler({
         },
     ],
     requestHandler: async ({ request, page, crawler: crawlerRef }) => {
+        if (capReached()) return;
         const { label } = request.userData;
         await handleConsent(page);
 
         // A search with a single unambiguous result redirects straight to the place page.
         const isPlacePage = page.url().includes('/maps/place/');
 
-        if (label === 'SEARCH' && !isPlacePage) {
+        if (label !== 'PLACE' && !isPlacePage) {
             await handleSearchPage({ request, page, crawlerRef });
         } else {
-            await handlePlacePage({ request, page });
+            await handlePlacePage({ request, page, crawlerRef });
         }
     },
     failedRequestHandler: async ({ request }) => {
@@ -140,21 +195,21 @@ const crawler = new PlaywrightCrawler({
 
 async function handleSearchPage({ request, page, crawlerRef }) {
     const { term, query } = request.userData;
-    log.info(`Searching: "${query}"`);
+    log.info(`Searching: "${query ?? request.url}"`);
 
     try {
         await page.waitForSelector('div[role="feed"]', { timeout: 60_000 });
     } catch {
         const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 500));
         if (/couldn't find|can't find|no results/i.test(bodyText)) {
-            log.warning(`No results for "${query}".`);
+            log.warning(`No results for "${query ?? request.url}".`);
             return;
         }
-        throw new Error(`Results feed did not load for "${query}" (possible block/captcha).`);
+        throw new Error(`Results feed did not load for "${query ?? request.url}" (possible block/captcha).`);
     }
 
     // Scroll the results feed until we have enough listings or reach the end.
-    const targetCount = maxResultsPerSearch;
+    const targetCount = maxPlacesPerSearch;
     let previousCount = 0;
     let stagnantRounds = 0;
 
@@ -193,21 +248,39 @@ async function handleSearchPage({ request, page, crawlerRef }) {
         });
     });
 
-    log.info(`Found ${cards.length} listings for "${query}".`);
+    log.info(`Found ${cards.length} listings for "${query ?? request.url}".`);
     stats.found += cards.length;
 
-    let enqueued = enqueuedPerTerm.get(term) ?? 0;
+    const termKey = term ?? request.url;
+    let enqueued = enqueuedPerTerm.get(termKey) ?? 0;
     for (const card of cards.slice(0, targetCount)) {
+        if (capReached()) break;
         const { rating, reviewCount } = parseRatingLabel(card.ratingLabel);
 
         // Pre-filter on card data so we don't waste page loads on listings
-        // that already fail the rating/review filters.
-        if (!passesRatingReviewFilters({ rating, reviewCount })) {
+        // that already fail the rating/review or name-matching filters.
+        if (!passesRatingReviewFilters({ rating, reviewCount })
+            || !matchesSearchTerm(card.name, term, searchMatching)) {
             stats.filteredOut += 1;
             continue;
         }
         if (enqueued >= targetCount) break;
         enqueued += 1;
+
+        if (exportPlaceUrls) {
+            // Fast mode: save straight from the search results, skip place pages.
+            await saveItem({
+                name: card.name,
+                rating,
+                reviewCount,
+                gmapsUrl: card.href,
+                coordinates: parseCoordsFromUrl(card.href),
+                searchTerm: term ?? null,
+                location: location || null,
+                scrapedAt: new Date().toISOString(),
+            }, crawlerRef);
+            continue;
+        }
 
         await crawlerRef.addRequests([{
             url: card.href,
@@ -218,10 +291,10 @@ async function handleSearchPage({ request, page, crawlerRef }) {
             },
         }]);
     }
-    enqueuedPerTerm.set(term, enqueued);
+    enqueuedPerTerm.set(termKey, enqueued);
 }
 
-async function handlePlacePage({ request, page }) {
+async function handlePlacePage({ request, page, crawlerRef }) {
     const { term, cardData = {} } = request.userData;
 
     await page.waitForSelector('h1', { timeout: 60_000 });
@@ -229,12 +302,16 @@ async function handlePlacePage({ request, page }) {
 
     const item = {
         name: details.name ?? cardData.name ?? null,
+        placeId: details.placeId,
         category: details.category,
         rating: details.rating ?? cardData.rating ?? null,
         reviewCount: details.reviewCount ?? cardData.reviewCount ?? null,
         phone: details.phone,
         website: details.website,
         address: details.address,
+        permanentlyClosed: details.permanentlyClosed,
+        temporarilyClosed: details.temporarilyClosed,
+        coordinates: parseCoordsFromUrl(page.url()),
         gmapsUrl: page.url(),
         searchTerm: term ?? null,
         location: location || null,
@@ -242,24 +319,38 @@ async function handlePlacePage({ request, page }) {
     };
 
     if (!passesWebsiteFilter(item.website)
-        || !passesRatingReviewFilters(item, { strict: true })) {
+        || !passesPhoneFilter(item.phone)
+        || !passesRatingReviewFilters(item, { strict: true })
+        || !passesClosedFilter(item)
+        || !passesCategoryFilter(item.category)
+        || !matchesSearchTerm(item.name, term, searchMatching)) {
         stats.filteredOut += 1;
         log.debug(`Filtered out: ${item.name}`);
         return;
     }
 
-    stats.scraped += 1;
-    await Actor.pushData(item);
+    await saveItem(item, crawlerRef);
     log.info(`Saved: ${item.name} (${item.rating} stars, ${item.reviewCount} reviews)`);
 }
 
-const startRequests = searchTerms.map((term) => {
+const startRequests = [];
+
+for (const term of searchTerms) {
     const query = location ? `${term} in ${location}` : term;
-    return {
+    startRequests.push({
         url: `${BASE_URL}/maps/search/${encodeURIComponent(query)}?hl=${encodeURIComponent(language)}`,
         userData: { label: 'SEARCH', term, query },
-    };
-});
+    });
+}
+
+// Start URLs: place URLs go straight to detail extraction, anything else is
+// treated as a search/results page.
+for (const entry of startUrls) {
+    const url = typeof entry === 'string' ? entry : entry?.url;
+    if (!url) continue;
+    const label = url.includes('/maps/place/') ? 'PLACE' : 'SEARCH';
+    startRequests.push({ url, userData: { label, term: null, query: null } });
+}
 
 await crawler.run(startRequests);
 
