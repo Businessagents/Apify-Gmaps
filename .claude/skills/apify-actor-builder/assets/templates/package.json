@@ -1,0 +1,17 @@
+{
+    "name": "{{ACTOR_NAME}}",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "{{ACTOR_DESCRIPTION}}",
+    "engines": { "node": ">=18.0.0" },
+    "dependencies": {
+        "apify": "^3.2.6",
+        "crawlee": "^3.11.5",
+        "playwright": "*"
+    },
+    "scripts": {
+        "start": "node src/main.js",
+        "test": "node test/unit.mjs"
+    },
+    "license": "ISC"
+}

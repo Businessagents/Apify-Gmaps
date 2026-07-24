@@ -1,0 +1,31 @@
+{
+    "title": "{{ACTOR_TITLE}}",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "startUrlsOrTerms": {
+            "title": "Search terms",
+            "type": "array",
+            "description": "What to scrape. Replace with the input shape the interview settled on.",
+            "editor": "stringList",
+            "prefill": ["example"]
+        },
+        "maxItems": {
+            "title": "Max items",
+            "type": "integer",
+            "description": "Stop after saving this many results. Empty = no cap.",
+            "editor": "number",
+            "minimum": 1,
+            "nullable": true
+        },
+        "proxyConfiguration": {
+            "title": "Proxy configuration",
+            "type": "object",
+            "description": "Residential proxies are strongly recommended for most sites.",
+            "editor": "proxy",
+            "prefill": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] },
+            "default": { "useApifyProxy": true }
+        }
+    },
+    "required": []
+}

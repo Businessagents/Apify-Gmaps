@@ -1,0 +1,25 @@
+{
+    "actorSpecification": 1,
+    "name": "{{ACTOR_NAME}}",
+    "title": "{{ACTOR_TITLE}}",
+    "description": "{{ACTOR_DESCRIPTION}}",
+    "version": "0.1",
+    "input": "./input_schema.json",
+    "dockerfile": "../Dockerfile",
+    "storages": {
+        "dataset": {
+            "actorSpecification": 1,
+            "title": "{{ACTOR_TITLE}} results",
+            "views": {
+                "overview": {
+                    "title": "Overview",
+                    "transformation": { "fields": ["name"] },
+                    "display": {
+                        "component": "table",
+                        "properties": { "name": { "label": "Name", "format": "text" } }
+                    }
+                }
+            }
+        }
+    }
+}
